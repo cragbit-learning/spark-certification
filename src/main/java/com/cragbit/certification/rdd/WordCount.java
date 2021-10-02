@@ -34,7 +34,8 @@ class WordCountSpark implements Serializable {
 	}
 
 	public SparkConf getSparkconf() {
-		sparkConf = new SparkConf().setAppName("WordCount").setMaster("local[*]");
+		sparkConf = new SparkConf().setAppName("WordCount");
+				//.setMaster("local[*]");
 		return sparkConf;
 	}
 
@@ -58,24 +59,45 @@ class WordCountSpark implements Serializable {
 	}
 
 	public void wordCount() {
-
+		
+		//stage1
 		JavaRDD<String> setenceRDD = javaSparkContext
-				.textFile("/Users/kumars3/learn-spark/spark-certification/data/input/");
-		JavaRDD<String> wordsRDD = setenceRDD.flatMap(setence -> Arrays.asList(setence.split(" ")).iterator());
+				//.textFile("/Users/kumars3/learn-spark/spark-certification/data/input/",3);
+				.textFile("s3://sanjiv-airflow/input/test/hit_data.tsv");
+		
+		System.out.println("number of partition : " + setenceRDD.getNumPartitions() );
+		
+		
+		JavaRDD<String> wordsRDD = setenceRDD.flatMap(setence -> Arrays.asList(setence.split("\t")).iterator());
+		
+		
 		JavaRDD<String> filteredWordsRDD = wordsRDD.filter(word -> removeBadWords(word));
-		JavaPairRDD<String, Integer> tupleWordRDD = filteredWordsRDD
+		JavaRDD<String> cleanWordsRDD = filteredWordsRDD.filter(word -> word.trim().length() > 1);
+		
+		JavaPairRDD<String, Integer> tupleWordRDD = cleanWordsRDD
 				.mapToPair(word -> new Tuple2<String, Integer>(word, 1));
+		
+		//stage2
 		JavaPairRDD<String, Integer> reducedWordByKey = tupleWordRDD.reduceByKey((value1, value2) -> value1 + value2);
+		
+		// sortby word, stage3
+		JavaPairRDD<String, Integer> sotedWords = reducedWordByKey.sortByKey(); //ascending
 
-		JavaPairRDD<Integer, String> switchedTuple = reducedWordByKey
-				.mapToPair(tupleWord -> new Tuple2<Integer, String>(tupleWord._2, tupleWord._1));
-		JavaPairRDD<Integer, String> sortedSwitchedTuple = switchedTuple.sortByKey(false);
-		List<Tuple2<Integer, String>> listWords = sortedSwitchedTuple.collect();
+		// sort by count
+		JavaPairRDD<Integer, String> switchedTuple = reducedWordByKey.mapToPair(tupleWord -> new Tuple2<Integer, String>(tupleWord._2, tupleWord._1));
+		
+		//stage4
+		JavaPairRDD<Integer, String> sortedSwitchedTuple = switchedTuple.sortByKey(false); 
+		
+		//stage5
+		List<Tuple2<Integer, String>> listWords = sortedSwitchedTuple.take(10); // action, extract data from all worker nodes
 
 		for (Tuple2<Integer, String> t : listWords) {
 			System.out.println(t._2 + " : " + t._1);
 		}
-
+		
+		//System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+		//sortedSwitchedTuple.foreach(x -> System.out.println(x)); 
 		// System.out.println(listWords);
 
 		closeSparkconf();
@@ -90,5 +112,7 @@ class WordCountSpark implements Serializable {
 			return true;
 		}
 	}
+	
+	// (sanjiv ,1 ) , (ashok,1), (sanjiv,1) ---> tuple | object ( nane ,1)
 
 }

@@ -75,7 +75,7 @@ class TupleExampleSpark implements Serializable {
 		}
 		
 		//2nd way to do from tuple
-		JavaPairRDD<Integer, Double> numberTupleRDD = numberRDD.mapToPair(number -> new Tuple2<Integer, Double>(number, Math.sqrt(number)));
+		JavaPairRDD<Integer, Double> numberTupleRDD = numberRDD.mapToPair(number -> new Tuple2<Integer, Double>(number, Math.sqrt(number))); // tuple allow 24 atributes like Tuple24
 		List<Tuple2<Integer, Double>> tupleNumber = numberTupleRDD.collect();
 		
 		for(Tuple2 t : tupleNumber) {
